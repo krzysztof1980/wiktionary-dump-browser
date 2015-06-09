@@ -1,0 +1,22 @@
+group 'pl.kwitukiewicz'
+version '1.0-SNAPSHOT'
+
+apply plugin: 'java'
+
+repositories {
+    mavenCentral()
+    mavenLocal()
+}
+
+dependencies {
+    compile 'de.tudarmstadt.ukp.jwktl:latest.integration',
+            'org.elasticsearch:elasticsearch:1.5.2',
+            'com.fasterxml.jackson.core:jackson-databind:2.5.3',
+            'org.apache.commons:commons-lang3:3.4',
+            'org.slf4j:slf4j-api:1.7.12'
+
+    runtime 'ch.qos.logback:logback-classic:1.1.3',
+            'org.slf4j:jul-to-slf4j:1.7.12'
+
+    testCompile 'junit:junit:4.11'
+}
