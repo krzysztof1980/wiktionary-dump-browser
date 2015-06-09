@@ -1,5 +1,7 @@
 package pl.kwitukiewicz.wdb.model;
 
+import java.util.List;
+
 /**
  * @author Krzysztof Witukiewicz
  */
@@ -7,7 +9,7 @@ public class WiktionaryPageDocument {
 
     private String namespace;
     private String title;
-    private String text;
+    private String[] text;
 
     public String getNamespace() {
         return namespace;
@@ -25,11 +27,11 @@ public class WiktionaryPageDocument {
         this.title = title;
     }
 
-    public String getText() {
+    public String[] getText() {
         return text;
     }
 
-    public void setText(String text) {
+    public void setText(String[] text) {
         this.text = text;
     }
 }
