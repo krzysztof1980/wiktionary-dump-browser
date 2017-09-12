@@ -1,7 +1,5 @@
 package pl.kwitukiewicz.wdb.model;
 
-import java.util.List;
-
 /**
  * @author Krzysztof Witukiewicz
  */
@@ -34,4 +32,12 @@ public class WiktionaryPageDocument {
     public void setText(String[] text) {
         this.text = text;
     }
+	
+	@Override
+	public String toString() {
+		return "WiktionaryPageDocument{" +
+				       "namespace='" + namespace + '\'' +
+				       ", title='" + title + '\'' +
+				       '}';
+	}
 }

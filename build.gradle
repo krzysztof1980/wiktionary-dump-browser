@@ -9,8 +9,8 @@ repositories {
 }
 
 dependencies {
-    compile 'de.tudarmstadt.ukp.jwktl:latest.integration',
-            'org.elasticsearch:elasticsearch:1.5.2',
+    compile 'de.tudarmstadt.ukp.jwktl:jwktl:1.0.1',
+            'org.elasticsearch.client:elasticsearch-rest-client:5.6.0',
             'com.fasterxml.jackson.core:jackson-databind:2.5.3',
             'org.apache.commons:commons-lang3:3.4',
             'org.slf4j:slf4j-api:1.7.12'

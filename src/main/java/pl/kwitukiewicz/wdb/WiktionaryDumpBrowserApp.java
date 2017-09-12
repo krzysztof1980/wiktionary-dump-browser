@@ -1,17 +1,12 @@
 package pl.kwitukiewicz.wdb;
 
-import java.io.File;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-
-import de.tudarmstadt.ukp.jwktl.JWKTL;
-import de.tudarmstadt.ukp.jwktl.api.IWiktionaryEdition;
-import de.tudarmstadt.ukp.jwktl.api.IWiktionaryPage;
-import de.tudarmstadt.ukp.jwktl.api.WiktionaryFormatter;
 import de.tudarmstadt.ukp.jwktl.parser.WiktionaryDumpParser;
 import pl.kwitukiewicz.wdb.elasticsearch.CreateIndexService;
 import pl.kwitukiewicz.wdb.parser.WiktionaryPageParser;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 /**
  * Created by Krzysztof Witukiewicz
@@ -30,7 +25,7 @@ public class WiktionaryDumpBrowserApp {
             return;
         }
 
-        CreateIndexService createIndexService = new CreateIndexService();
+        CreateIndexService createIndexService = CreateIndexService.create();
         WiktionaryDumpParser dumpParser = new WiktionaryDumpParser(
                 new WiktionaryPageParser(createIndexService::indexWiktionaryPage, createIndexService::cleanup));
         dumpParser.parse(dumpFilePath.toFile());
