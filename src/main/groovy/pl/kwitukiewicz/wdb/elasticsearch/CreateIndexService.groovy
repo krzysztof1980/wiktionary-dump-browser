@@ -102,12 +102,7 @@ class CreateIndexService {
     }
 
     void indexWiktionaryPage(WiktionaryPageDocument document) {
-        String id
-        try {
-            id = URLEncoder.encode(document.getNamespace() + ":" + document.getTitle(), "UTF-8")
-        } catch (UnsupportedEncodingException e) {
-            throw new RuntimeException("Error indexing " + document, e)
-        }
+        String id = document.getNamespace() + ":" + document.getTitle()
         byte[] body
         try {
             body = objectMapper.writeValueAsBytes(document)
@@ -142,8 +137,15 @@ class CreateIndexService {
     }
 
     private void initialize() {
-        deleteIndex()
-        createIndex()
+        try {
+            deleteIndex()
+            createIndex()
+        } catch (Exception e) {
+            bulkProcessor.close()
+            ThreadPool.terminate(threadPool, 30, TimeUnit.SECONDS)
+            lowLevelClient.close()
+            throw e
+        }
     }
 
     private void deleteIndex() {
@@ -175,7 +177,8 @@ class CreateIndexService {
         "${TYPE}": {
             "properties": {
                 "namespace": {
-                    "type": "text"
+                    "type": "keyword",
+                    "null_value": "UNKNOWN"
                 },
                 "title": {
                     "type": "text",
