@@ -79,6 +79,6 @@ public class WiktionaryPageParser implements IWiktionaryPageParser {
 
     @Override
     public void setText(String s) {
-        currentPage.setText(s.split("\n"));
+        currentPage.setText(s);
     }
 }
