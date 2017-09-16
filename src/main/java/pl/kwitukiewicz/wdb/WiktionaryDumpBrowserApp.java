@@ -1,7 +1,7 @@
 package pl.kwitukiewicz.wdb;
 
 import de.tudarmstadt.ukp.jwktl.parser.WiktionaryDumpParser;
-import pl.kwitukiewicz.wdb.elasticsearch.CreateIndexService;
+import pl.kwitukiewicz.wdb.elasticsearch.WiktionaryDumpEsRepository;
 import pl.kwitukiewicz.wdb.parser.WiktionaryPageParser;
 
 import java.nio.file.Files;
@@ -25,9 +25,15 @@ public class WiktionaryDumpBrowserApp {
             return;
         }
 
-        CreateIndexService createIndexService = CreateIndexService.create();
+        WiktionaryDumpEsRepository wiktionaryDumpRepository = new WiktionaryDumpEsRepository();
         WiktionaryDumpParser dumpParser = new WiktionaryDumpParser(
-                new WiktionaryPageParser(createIndexService::indexWiktionaryPage, createIndexService::cleanup));
-        dumpParser.parse(dumpFilePath.toFile());
+                new WiktionaryPageParser(wiktionaryDumpRepository::indexObject));
+        try {
+        	wiktionaryDumpRepository.prepareIndexForRebuild();
+	        dumpParser.parse(dumpFilePath.toFile());
+	        wiktionaryDumpRepository.indexRebuildDone();
+        } finally {
+        	wiktionaryDumpRepository.cleanup();
+        }
     }
 }
