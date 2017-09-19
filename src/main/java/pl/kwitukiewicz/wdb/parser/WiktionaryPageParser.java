@@ -71,7 +71,6 @@ public class WiktionaryPageParser implements IWiktionaryPageParser {
 
     @Override
     public void setTitle(String title, String namespace) {
-    	currentPage.setId(String.valueOf(namespace) + ":" + String.valueOf(title));
         currentPage.setTitle(title);
         currentPage.setNamespace(namespace);
     }

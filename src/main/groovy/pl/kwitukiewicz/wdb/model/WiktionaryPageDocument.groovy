@@ -1,13 +1,9 @@
 package pl.kwitukiewicz.wdb.model
-
-import pl.kwitukiewicz.wdb.elasticsearch.Indexable
-
 /**
  * @author Krzysztof Witukiewicz
  */
-class WiktionaryPageDocument implements Indexable {
+class WiktionaryPageDocument {
 
-	String id
     String namespace
     String title
     String text
@@ -15,8 +11,7 @@ class WiktionaryPageDocument implements Indexable {
     @Override
     String toString() {
         return "WiktionaryPageDocument{" +
-                "id='" + id + '\'' +
-                ", namespace='" + namespace + '\'' +
+                "namespace='" + namespace + '\'' +
                 ", title='" + title + '\'' +
                 '}'
     }

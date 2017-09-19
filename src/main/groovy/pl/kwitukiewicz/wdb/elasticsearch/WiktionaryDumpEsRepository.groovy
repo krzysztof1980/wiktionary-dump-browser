@@ -43,4 +43,9 @@ class WiktionaryDumpEsRepository extends ElasticsearchIndexingRepository<Wiktion
     protected Logger getLogger() {
         return logger
     }
+
+    @Override
+    protected String createIdForObject(WiktionaryPageDocument doc) {
+        return String.valueOf(doc.namespace) + ":" + String.valueOf(doc.title)
+    }
 }

@@ -24,7 +24,7 @@ import java.util.concurrent.atomic.AtomicInteger
 /**
  * @author Krzysztof Witukiewicz
  */
-abstract class ElasticsearchIndexingRepository<T extends Indexable> extends ElasticsearchRepository {
+abstract class ElasticsearchIndexingRepository<T> extends ElasticsearchRepository {
 
     private ThreadPool threadPool
     private BulkProcessor bulkProcessor
@@ -60,13 +60,15 @@ abstract class ElasticsearchIndexingRepository<T extends Indexable> extends Elas
     void indexObject(T obj) {
         ObjectMapper objectMapper = new ObjectMapper()
         try {
-            bulkProcessor.add(new IndexRequest(index, type, obj.id)
+            bulkProcessor.add(new IndexRequest(index, type, createIdForObject(obj))
                                       .opType(DocWriteRequest.OpType.CREATE)
                                       .source(objectMapper.writeValueAsBytes(obj), XContentType.JSON))
         } catch (JsonProcessingException e) {
             throw new RuntimeException(e)
         }
     }
+
+    protected abstract String createIdForObject(T obj)
 
     private void deleteIndex() {
         try {
