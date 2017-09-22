@@ -27,7 +27,7 @@ public class WiktionaryDumpBrowserApp {
 
         WiktionaryDumpEsRepository wiktionaryDumpRepository = new WiktionaryDumpEsRepository();
         WiktionaryDumpParser dumpParser = new WiktionaryDumpParser(
-                new WiktionaryPageParser(wiktionaryDumpRepository::indexObject));
+                new WiktionaryPageParser(wiktionaryDumpRepository::indexWiktionaryPage));
         try {
         	wiktionaryDumpRepository.prepareIndexForRebuild();
 	        dumpParser.parse(dumpFilePath.toFile());

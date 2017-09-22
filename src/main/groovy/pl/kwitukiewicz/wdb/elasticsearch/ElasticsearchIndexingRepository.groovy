@@ -1,7 +1,6 @@
 package pl.kwitukiewicz.wdb.elasticsearch
 
 import com.fasterxml.jackson.core.JsonProcessingException
-import com.fasterxml.jackson.databind.ObjectMapper
 import org.apache.http.HttpEntity
 import org.apache.http.HttpStatus
 import org.apache.http.entity.ContentType
@@ -24,7 +23,7 @@ import java.util.concurrent.atomic.AtomicInteger
 /**
  * @author Krzysztof Witukiewicz
  */
-abstract class ElasticsearchIndexingRepository<T> extends ElasticsearchRepository {
+abstract class ElasticsearchIndexingRepository extends ElasticsearchRepository {
 
     private ThreadPool threadPool
     private BulkProcessor bulkProcessor
@@ -57,18 +56,15 @@ abstract class ElasticsearchIndexingRepository<T> extends ElasticsearchRepositor
         super.cleanup()
     }
 
-    void indexObject(T obj) {
-        ObjectMapper objectMapper = new ObjectMapper()
+    void indexDocument(String id, String docJsonString) {
         try {
-            bulkProcessor.add(new IndexRequest(index, type, createIdForObject(obj))
+            bulkProcessor.add(new IndexRequest(index, type, id)
                                       .opType(DocWriteRequest.OpType.CREATE)
-                                      .source(objectMapper.writeValueAsBytes(obj), XContentType.JSON))
+                                      .source(docJsonString, XContentType.JSON))
         } catch (JsonProcessingException e) {
             throw new RuntimeException(e)
         }
     }
-
-    protected abstract String createIdForObject(T obj)
 
     private void deleteIndex() {
         try {

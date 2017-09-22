@@ -13,11 +13,13 @@ import java.util.stream.Collectors
 /**
  * @author Krzysztof Witukiewicz
  */
-class WiktionaryDumpEsRepository extends ElasticsearchIndexingRepository<WiktionaryPageDocument> {
+class WiktionaryDumpEsRepository extends ElasticsearchIndexingRepository {
     private static final Logger logger = LoggerFactory.getLogger(WiktionaryDumpEsRepository.class)
 
     private static final String WIKTIONARY_DUMP_INDEX = "dewiktionary_dump"
     private static final String WIKTIONARY_DUMP_TYPE = "page"
+
+    private final ObjectMapper objectMapper = new ObjectMapper()
 
     WiktionaryDumpEsRepository() {
         super(WIKTIONARY_DUMP_INDEX, WIKTIONARY_DUMP_TYPE)
@@ -39,13 +41,14 @@ class WiktionaryDumpEsRepository extends ElasticsearchIndexingRepository<Wiktion
                      .collect(Collectors.toList())
     }
 
-    @Override
-    protected Logger getLogger() {
-        return logger
+    void indexWiktionaryPage(WiktionaryPageDocument doc) {
+        def id = String.valueOf(doc.namespace) + ":" + String.valueOf(doc.title)
+        def docJson = objectMapper.writeValueAsString(doc)
+        indexDocument(id, docJson)
     }
 
     @Override
-    protected String createIdForObject(WiktionaryPageDocument doc) {
-        return String.valueOf(doc.namespace) + ":" + String.valueOf(doc.title)
+    protected Logger getLogger() {
+        return logger
     }
 }
