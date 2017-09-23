@@ -1,6 +1,7 @@
 package pl.kwitukiewicz.wdb.elasticsearch
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import org.elasticsearch.action.get.GetRequest
 import org.elasticsearch.action.search.SearchRequest
 import org.elasticsearch.index.query.QueryBuilders
 import org.elasticsearch.search.builder.SearchSourceBuilder
@@ -25,7 +26,7 @@ class WiktionaryDumpEsRepository extends ElasticsearchIndexingRepository {
         super(WIKTIONARY_DUMP_INDEX, WIKTIONARY_DUMP_TYPE)
     }
 
-    List<WiktionaryPageDocument> findEntryByTitle(String title) {
+    List<WiktionaryPageDocument> findPageByTitle(String title) {
         def searchRequest = new SearchRequest(index)
         searchRequest.types(type)
 
@@ -39,6 +40,13 @@ class WiktionaryDumpEsRepository extends ElasticsearchIndexingRepository {
                      .map({ h -> h.getSourceAsString() })
                      .map({ docString -> objectMapper.readValue(docString, WiktionaryPageDocument) })
                      .collect(Collectors.toList())
+    }
+
+    WiktionaryPageDocument findPageById(String id) {
+        id = URLEncoder.encode(id, "UTF-8")
+        def getRequest = new GetRequest(index, type, id)
+        def response = client.get(getRequest)
+        return response.isExists() ? objectMapper.readValue(response.sourceAsString, WiktionaryPageDocument) : null
     }
 
     void indexWiktionaryPage(WiktionaryPageDocument doc) {
