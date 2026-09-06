@@ -1,0 +1,8 @@
+# Local-dev Elasticsearch config: security disabled so the Java client
+# (plain HTTP + basic auth) works without TLS. Mounting this file suppresses
+# the ES 8 docker image's auto-generated "SECURITY AUTO CONFIGURATION" block,
+# which otherwise forces :9200 to HTTPS.
+cluster.name: "docker-cluster"
+network.host: 0.0.0.0
+discovery.type: single-node
+xpack.security.enabled: false
