@@ -3,12 +3,12 @@ plugins {
     id 'maven-publish'
 }
 
-group 'pl.kwitukiewicz'
-version '1.0-SNAPSHOT'
+group = 'pl.kwitukiewicz'
+version = '1.0-SNAPSHOT'
 
 java {
-    sourceCompatibility = 17
-    targetCompatibility = 17
+    sourceCompatibility = 25
+    targetCompatibility = 25
 }
 
 repositories {
@@ -23,7 +23,7 @@ dependencies {
             'com.fasterxml.jackson.core:jackson-databind:2.20.2',
             'org.apache.commons:commons-lang3:3.4',
             'org.slf4j:slf4j-api:2.0.18',
-            'org.apache.groovy:groovy:4.0.11',
+            'org.apache.groovy:groovy:4.0.27',
             // spatial4j and jts were needed for the old ES client's geo support
             // (https://github.com/elastic/elasticsearch/issues/9891); kept for safety
             'org.locationtech.spatial4j:spatial4j:0.6',
@@ -33,7 +33,7 @@ dependencies {
             'org.slf4j:jul-to-slf4j:2.0.18'
 
     testImplementation 'org.junit.jupiter:junit-jupiter:5.14.1',
-            'org.apache.groovy:groovy:4.0.11'
+            'org.apache.groovy:groovy:4.0.27'
 }
 
 sourceSets {
