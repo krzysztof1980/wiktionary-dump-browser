@@ -1,23 +1,12 @@
 package pl.kwitukiewicz.wdb.elasticsearch
 
-import com.fasterxml.jackson.core.JsonProcessingException
-import org.apache.http.HttpEntity
-import org.apache.http.HttpStatus
 import org.apache.http.entity.ContentType
 import org.apache.http.nio.entity.NStringEntity
-import org.elasticsearch.action.DocWriteRequest
-import org.elasticsearch.action.bulk.BulkProcessor
-import org.elasticsearch.action.bulk.BulkRequest
-import org.elasticsearch.action.bulk.BulkResponse
-import org.elasticsearch.action.index.IndexRequest
+import org.apache.http.util.EntityUtils
+import org.elasticsearch.client.Request
+import org.elasticsearch.client.Response
 import org.elasticsearch.client.ResponseException
-import org.elasticsearch.common.settings.Settings
-import org.elasticsearch.common.unit.ByteSizeUnit
-import org.elasticsearch.common.unit.ByteSizeValue
-import org.elasticsearch.common.xcontent.XContentType
-import org.elasticsearch.threadpool.ThreadPool
 
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -25,53 +14,90 @@ import java.util.concurrent.atomic.AtomicInteger
  */
 abstract class ElasticsearchIndexingRepository extends ElasticsearchRepository {
 
-    private ThreadPool threadPool
-    private BulkProcessor bulkProcessor
-    private BulkProcessor.Listener bulkProcessorListener
+    private static final long BULK_SIZE_BYTES = 15L * 1024 * 1024  // 15 MB
 
+    private StringBuilder bulkBody
+    private long bulkByteCount
+    private int pendingDocs
     private final AtomicInteger indexingCounter = new AtomicInteger()
 
     ElasticsearchIndexingRepository(String index, String type) {
         super(index, type)
-        bulkProcessorListener = new BulkProcessorListener(indexingCounter)
     }
 
     void prepareIndexForRebuild() {
         deleteIndex()
         createIndex()
-        initializeBulkProcessor()
+        initializeBulk()
         indexingCounter.set(0)
     }
 
-    void indexRebuildDone() {
+    synchronized void indexRebuildDone() {
+        flushBulk()
         refreshIndex()
-        closeBulkProcessor()
         logger.info("Indexing was finished - ${indexingCounter.get()} documents were indexed!")
     }
 
     @Override
-    void cleanup() {
-        if (bulkProcessor != null)
-            closeBulkProcessor()
+    synchronized void cleanup() {
+        if (bulkBody != null) {
+            flushBulk()
+            bulkBody = null
+        }
         super.cleanup()
     }
 
-    void indexDocument(String id, String docJsonString) {
-        try {
-            bulkProcessor.add(new IndexRequest(index, type, id)
-                                      .opType(DocWriteRequest.OpType.CREATE)
-                                      .source(docJsonString, XContentType.JSON))
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException(e)
+    /**
+     * May be called concurrently (the parser dispatches pages to a thread pool), so the
+     * shared bulk state is guarded by the monitor. The old BulkProcessor handled this
+     * internally; the new client has no auto-flushing bulk processor, so we accumulate
+     * NDJSON bulk actions and flush them once the size threshold is reached.
+     */
+    synchronized void indexDocument(String id, String docJsonString) {
+        bulkBody.append("{\"index\":{\"_index\":\"${index}\",\"_id\":\"${id}\"}}\n")
+        bulkBody.append(docJsonString).append("\n")
+        bulkByteCount += docJsonString.length()
+        pendingDocs++
+        if (bulkByteCount >= BULK_SIZE_BYTES) {
+            flushBulk()
         }
+    }
+
+    private void initializeBulk() {
+        bulkBody = new StringBuilder()
+        bulkByteCount = 0
+        pendingDocs = 0
+    }
+
+    private void flushBulk() {
+        if (pendingDocs == 0) return
+        try {
+            Request request = new Request("POST", "/_bulk")
+            request.setEntity(new NStringEntity(bulkBody.toString(), ContentType.APPLICATION_JSON))
+            Response response = lowLevelClient.performRequest(request)
+            String responseBody = EntityUtils.toString(response.getEntity())
+            if (responseBody.contains('"errors":true')) {
+                logger.error("Bulk request had partial failures: ${responseBody}")
+            } else {
+                int currCount = indexingCounter.addAndGet(pendingDocs)
+                if (currCount % 10000 == 0) {
+                    logger.info("Indexed ${currCount} documents so far!")
+                }
+            }
+        } catch (Exception e) {
+            logger.error("Error indexing documents", e)
+        }
+        bulkBody = new StringBuilder()
+        bulkByteCount = 0
+        pendingDocs = 0
     }
 
     private void deleteIndex() {
         try {
-            lowLevelClient.performRequest("DELETE", "/${index}")
+            lowLevelClient.performRequest(new Request("DELETE", "/${index}"))
             logger.info("Deleted index ${index}")
         } catch (ResponseException e) {
-            if (e.getResponse().getStatusLine().getStatusCode() == HttpStatus.SC_NOT_FOUND) {
+            if (e.getResponse().getStatusLine().getStatusCode() == 404) {
                 logger.info("Index ${index} does not exist - nothing to delete.")
             } else {
                 throw new RuntimeException("Unexpected error deleting index ${index}", e)
@@ -92,41 +118,14 @@ abstract class ElasticsearchIndexingRepository extends ElasticsearchRepository {
         }
     }
 }"""
-        HttpEntity entity = new NStringEntity(jsonString, ContentType.APPLICATION_JSON)
+        Request request = new Request("PUT", index)
+        request.setEntity(new NStringEntity(jsonString, ContentType.APPLICATION_JSON))
         try {
-            lowLevelClient.performRequest("PUT", index, Collections.emptyMap(), entity)
+            lowLevelClient.performRequest(request)
             logger.info("Created index ${index}")
         } catch (Exception e) {
             throw new RuntimeException("Error creating index ${index}", e)
         }
-    }
-
-    private void initializeBulkProcessor() {
-        threadPool = new ThreadPool(Settings.builder().put("node.name", "dummy").build())
-        bulkProcessor = new BulkProcessor.Builder({ r, l -> client.bulkAsync(r, l) },
-                                                  bulkProcessorListener,
-                                                  threadPool)
-                .setBulkSize(new ByteSizeValue(15, ByteSizeUnit.MB))
-                .build()
-    }
-
-    private void closeBulkProcessor() {
-        try {
-            if (bulkProcessor.awaitClose(5, TimeUnit.MINUTES)) {
-                logger.info("All bulk requests finished.")
-            } else {
-                logger.warn("There were unfinished bulk requests, consider increasing ttl.")
-            }
-        } catch (InterruptedException e) {
-            logger.error("Exception while waiting for bulk operation to finish", e)
-        } finally {
-            bulkProcessor.close()
-            if (!ThreadPool.terminate(threadPool, 30, TimeUnit.SECONDS)) {
-                logger.warn("ThreadPool termination timed out!")
-            }
-        }
-        bulkProcessor = null
-        threadPool = null
     }
 
     private void refreshIndex() {
@@ -138,41 +137,12 @@ abstract class ElasticsearchIndexingRepository extends ElasticsearchRepository {
         }
     }
 }"""
-        HttpEntity entity = new NStringEntity(jsonString, ContentType.APPLICATION_JSON)
+        Request request = new Request("PUT", "${index}/_settings")
+        request.setEntity(new NStringEntity(jsonString, ContentType.APPLICATION_JSON))
         try {
-            lowLevelClient.performRequest("PUT", "${index}/_settings", Collections.emptyMap(), entity)
+            lowLevelClient.performRequest(request)
         } catch (Exception e) {
             logger.error("Error setting refresh_interval to default value", e)
-        }
-    }
-
-    private class BulkProcessorListener implements BulkProcessor.Listener {
-        private final AtomicInteger indexingCounter
-
-        BulkProcessorListener(AtomicInteger indexingCounter) {
-            this.indexingCounter = indexingCounter
-        }
-
-        @Override
-        void beforeBulk(long executionId, BulkRequest request) {
-            // do nothing
-        }
-
-        @Override
-        void afterBulk(long executionId, BulkRequest request, BulkResponse response) {
-            if (response.hasFailures()) {
-                logger.error(response.buildFailureMessage())
-            } else {
-                int currCount = indexingCounter.addAndGet(request.numberOfActions())
-                if (currCount % 10000 == 0) {
-                    logger.info("Indexed ${currCount} documents so far!")
-                }
-            }
-        }
-
-        @Override
-        void afterBulk(long executionId, BulkRequest request, Throwable failure) {
-            logger.error("Exception was thrown during bulk execution " + executionId, failure)
         }
     }
 }

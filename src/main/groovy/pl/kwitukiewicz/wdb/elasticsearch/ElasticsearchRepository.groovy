@@ -1,5 +1,8 @@
 package pl.kwitukiewicz.wdb.elasticsearch
 
+import co.elastic.clients.elasticsearch.ElasticsearchClient
+import co.elastic.clients.json.jackson.JacksonJsonpMapper
+import co.elastic.clients.transport.rest_client.RestClientTransport
 import org.apache.commons.lang3.Validate
 import org.apache.http.HttpHost
 import org.apache.http.auth.AuthScope
@@ -7,7 +10,6 @@ import org.apache.http.auth.UsernamePasswordCredentials
 import org.apache.http.client.CredentialsProvider
 import org.apache.http.impl.client.BasicCredentialsProvider
 import org.elasticsearch.client.RestClient
-import org.elasticsearch.client.RestHighLevelClient
 import org.slf4j.Logger
 
 /**
@@ -15,10 +17,12 @@ import org.slf4j.Logger
  */
 abstract class ElasticsearchRepository {
     protected final String index
+    // Retained for API compatibility: ES 8 removed mapping types, so this is no longer
+    // used for any request. The constructor signature is kept so subclasses are unchanged.
     protected final String type
 
     protected final RestClient lowLevelClient
-    protected final RestHighLevelClient client
+    protected final ElasticsearchClient client
 
     protected ElasticsearchRepository(String index, String type) {
         Validate.notBlank(index)
@@ -34,7 +38,7 @@ abstract class ElasticsearchRepository {
             return httpClientBuilder.setDefaultCredentialsProvider(credentialsProvider)
         })
                                    .build()
-        client = new RestHighLevelClient(lowLevelClient)
+        client = new ElasticsearchClient(new RestClientTransport(lowLevelClient, new JacksonJsonpMapper()))
     }
 
     void cleanup() {

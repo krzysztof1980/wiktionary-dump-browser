@@ -1,8 +1,15 @@
+plugins {
+    id 'groovy'
+    id 'maven-publish'
+}
+
 group 'pl.kwitukiewicz'
 version '1.0-SNAPSHOT'
 
-apply plugin: 'groovy'
-apply plugin: 'maven' // needed for "gradle install"
+java {
+    sourceCompatibility = 17
+    targetCompatibility = 17
+}
 
 repositories {
     mavenCentral()
@@ -10,25 +17,40 @@ repositories {
 }
 
 dependencies {
-    // spatial4j and jts are needed because of https://github.com/elastic/elasticsearch/issues/9891
-    compile 'de.tudarmstadt.ukp.jwktl:jwktl:1.0.1',
-            'org.elasticsearch.client:elasticsearch-rest-high-level-client:5.6.0',
-            'com.fasterxml.jackson.core:jackson-databind:2.5.3',
+    implementation 'org.dkpro.jwktl:dkpro-jwktl:1.1.0',
+            'co.elastic.clients:elasticsearch-java:8.15.1',
+            'org.elasticsearch.client:elasticsearch-rest-client:8.15.1',
+            'com.fasterxml.jackson.core:jackson-databind:2.20.2',
             'org.apache.commons:commons-lang3:3.4',
-            'org.slf4j:slf4j-api:1.7.12',
-            'org.codehaus.groovy:groovy-all:2.4.12',
+            'org.slf4j:slf4j-api:2.0.18',
+            'org.apache.groovy:groovy:4.0.11',
+            // spatial4j and jts were needed for the old ES client's geo support
+            // (https://github.com/elastic/elasticsearch/issues/9891); kept for safety
             'org.locationtech.spatial4j:spatial4j:0.6',
             'com.vividsolutions:jts:1.13'
 
-    runtime 'ch.qos.logback:logback-classic:1.1.3',
-            'org.slf4j:jul-to-slf4j:1.7.12'
+    runtimeOnly 'ch.qos.logback:logback-classic:1.5.38',
+            'org.slf4j:jul-to-slf4j:2.0.18'
 
-    testCompile 'junit:junit:4.11'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.14.1',
+            'org.apache.groovy:groovy:4.0.11'
 }
 
 sourceSets {
     main {
         java { srcDirs = [] }    // no source dirs for the java compiler
         groovy { srcDirs = ["src/main/java", "src/main/groovy"] }  // compile everything in src/ with groovy
+    }
+}
+
+test {
+    useJUnitPlatform()
+}
+
+publishing {
+    publications {
+        maven(MavenPublication) {
+            from components.java
+        }
     }
 }
