@@ -1,5 +1,5 @@
 plugins {
-    id 'groovy'
+    id 'java'
     id 'maven-publish'
 }
 
@@ -23,7 +23,6 @@ dependencies {
             'com.fasterxml.jackson.core:jackson-databind:2.20.2',
             'org.apache.commons:commons-lang3:3.4',
             'org.slf4j:slf4j-api:2.0.18',
-            'org.apache.groovy:groovy:4.0.27',
             // spatial4j and jts were needed for the old ES client's geo support
             // (https://github.com/elastic/elasticsearch/issues/9891); kept for safety
             'org.locationtech.spatial4j:spatial4j:0.6',
@@ -32,15 +31,7 @@ dependencies {
     runtimeOnly 'ch.qos.logback:logback-classic:1.5.38',
             'org.slf4j:jul-to-slf4j:2.0.18'
 
-    testImplementation 'org.junit.jupiter:junit-jupiter:5.14.1',
-            'org.apache.groovy:groovy:4.0.27'
-}
-
-sourceSets {
-    main {
-        java { srcDirs = [] }    // no source dirs for the java compiler
-        groovy { srcDirs = ["src/main/java", "src/main/groovy"] }  // compile everything in src/ with groovy
-    }
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.14.1'
 }
 
 test {
