@@ -1,5 +1,7 @@
 package pl.kwitukiewicz.wdb.elasticsearch;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.http.entity.ContentType;
 import org.apache.http.nio.entity.NStringEntity;
 import org.apache.http.util.EntityUtils;
@@ -18,11 +20,14 @@ import java.util.concurrent.atomic.AtomicInteger;
 public abstract class ElasticsearchIndexingRepository extends ElasticsearchRepository {
 
     private static final long BULK_SIZE_BYTES = 15L * 1024 * 1024;  // 15 MB
+    private static final int PER_BULK_ERROR_LOG_LIMIT = 5;
+    private static final ObjectMapper objectMapper = new ObjectMapper();
 
     private StringBuilder bulkBody;
     private long bulkByteCount;
     private int pendingDocs;
     private final AtomicInteger indexingCounter = new AtomicInteger();
+    private final AtomicInteger failedDocsCounter = new AtomicInteger();
 
     private record Bulk(String ndjson, int docs) { }
 
@@ -44,12 +49,16 @@ public abstract class ElasticsearchIndexingRepository extends ElasticsearchRepos
         bulkFlusher.setDaemon(true);
         bulkFlusher.start();
         indexingCounter.set(0);
+        failedDocsCounter.set(0);
     }
 
     public synchronized void indexRebuildDone() {
         stopBulkBuffering();
         refreshIndex();
-        getLogger().info("Indexing was finished - " + indexingCounter.get() + " documents were indexed!");
+        int indexed = indexingCounter.get();
+        int failed = failedDocsCounter.get();
+        getLogger().info("Indexing was finished - " + indexed + " documents were indexed"
+                         + (failed > 0 ? ", " + failed + " FAILED" : "") + "!");
     }
 
     @Override
@@ -70,9 +79,10 @@ public abstract class ElasticsearchIndexingRepository extends ElasticsearchRepos
         if (bulkBody == null)
             throw new IllegalStateException(
                     "indexDocument called outside of prepareIndexForRebuild..indexRebuildDone on index " + index);
-        bulkBody.append("{\"index\":{\"_index\":\"" + index + "\",\"_id\":\"" + id + "\"}}\n");
+        String action = "{\"index\":{\"_index\":\"" + index + "\",\"_id\":\"" + id + "\"}}\n";
+        bulkBody.append(action);
         bulkBody.append(docJsonString).append("\n");
-        bulkByteCount += docJsonString.length();
+        bulkByteCount += utf8Length(action) + utf8Length(docJsonString) + 1;
         pendingDocs++;
         if (bulkByteCount >= BULK_SIZE_BYTES) {
             Bulk ready = new Bulk(bulkBody.toString(), pendingDocs);
@@ -93,22 +103,65 @@ public abstract class ElasticsearchIndexingRepository extends ElasticsearchRepos
     }
 
     private void sendBulk(String ndjson, int docs) {
+        int ok = 0;
+        int failed = 0;
         try {
             Request request = new Request("POST", "/_bulk");
             request.setEntity(new NStringEntity(ndjson, ContentType.APPLICATION_JSON));
             Response response = lowLevelClient.performRequest(request);
-            String responseBody = EntityUtils.toString(response.getEntity());
-            if (responseBody.contains("\"errors\":true")) {
-                getLogger().error("Bulk request had partial failures: " + responseBody);
-            } else {
-                int currCount = indexingCounter.addAndGet(docs);
-                if (currCount % 10000 == 0) {
-                    getLogger().info("Indexed " + currCount + " documents so far!");
+            JsonNode root = objectMapper.readTree(EntityUtils.toString(response.getEntity()));
+            if (root.path("errors").asBoolean(false)) {
+                for (JsonNode item : root.path("items")) {
+                    JsonNode result = item.path("index");
+                    JsonNode error = result.path("error");
+                    if (error.isMissingNode()) {
+                        ok++;
+                    } else {
+                        failed++;
+                        if (failed <= PER_BULK_ERROR_LOG_LIMIT) {
+                            getLogger().error("Bulk item failed [id={}]: {} - {}",
+                                              result.path("_id").asText(),
+                                              error.path("type").asText(), error.path("reason").asText());
+                        }
+                    }
                 }
+                if (failed > PER_BULK_ERROR_LOG_LIMIT)
+                    getLogger().error("...and {} more failed items in this bulk", failed - PER_BULK_ERROR_LOG_LIMIT);
+                getLogger().error("Bulk finished with failures: {} indexed, {} failed", ok, failed);
+            } else {
+                ok = docs;
             }
         } catch (Exception e) {
-            getLogger().error("Error indexing documents", e);
+            failed = docs;
+            getLogger().error("Bulk request failed - all {} documents of this bulk are lost", docs, e);
         }
+        if (ok > 0) {
+            int before = indexingCounter.getAndAdd(ok);
+            if (before / 10000 != (before + ok) / 10000)
+                getLogger().info("Indexed " + (before + ok) + " documents so far!");
+        }
+        if (failed > 0)
+            failedDocsCounter.addAndGet(failed);
+    }
+
+    /**
+     * UTF-8 encoded byte length of s - what ES actually counts for the 15 MB bulk threshold.
+     * Cheaper than getBytes(UTF_8): no array allocation per document.
+     */
+    static int utf8Length(String s) {
+        int bytes = s.length();
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c >= 0x80) {
+                if (Character.isHighSurrogate(c)) {
+                    bytes += 2;   // pair encodes as 4 bytes for 2 chars
+                    i++;          // skip the low surrogate
+                } else if (!Character.isLowSurrogate(c)) {
+                    bytes += (c < 0x800) ? 1 : 2;
+                }
+            }
+        }
+        return bytes;
     }
 
     private void flusherLoop() {
